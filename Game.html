@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Угадай пары!</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            margin: 0;
+            padding: 20px;
+            background: #f0f8ff;
+        }
+        .game-container {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            margin: 20px auto;
+            max-width: 800px;
+            flex-wrap: wrap;
+        }
+        .words-column {
+            background: white;
+            padding: 15px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            width: 200px;
+        }
+        .word {
+            margin: 10px;
+            padding: 10px;
+            background: #e3f2fd;
+            border-radius: 5px;
+            cursor: pointer;
+            user-select: none;
+            transition: all 0.3s;
+        }
+        .word.selected {
+            background: #fff176;
+        }
+        .word.locked {
+            background: #ffcc80;
+            cursor: default;
+        }
+        .word.correct {
+            background: #81c784;
+        }
+        .word.incorrect {
+            background: #e57373;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 10px;
+        }
+        button:disabled {
+            background: #cccccc;
+            cursor: not-allowed;
+        }
+        #result {
+            margin-top: 20px;
+            font-size: 18px;
+            min-height: 50px;
+        }
+    </style>
+</head>
+<body>
+    <h1>🎮 Угадай пары! 🎮</h1>
+    <button id="generate-btn">Новые слова</button>
+    <button id="guess-btn" disabled>Угадывать</button>
+    <button id="check-btn" disabled>Проверить</button>
+    
+    <div class="game-container">
+        <div class="words-column" id="adjectives">
+            <h2>Прилагательные</h2>
+        </div>
+        <div class="words-column" id="nouns">
+            <h2>Существительные</h2>
+        </div>
+    </div>
+    
+    <div id="result"></div>
+
+    <script>
+        // Базы слов (используем только ASCII символы для надежности)
+        const adjectives = [
+            "Летающий", "Сонный", "Золотой", "Прозрачный", "Громкий",
+            "Тихий", "Невидимый", "Острый", "Пушистый", "Горячий",
+            "Ледяной", "Кричащий", "Волшебный", "Ядовитый", "Грустный"
+        ];
+        
+        const nouns = [
+            "Дракон", "Зонт", "Книга", "Робот", "Облако",
+            "Кошка", "Мост", "Часы", "Шар", "Ветер",
+            "Фонарь", "Ключ", "Океан", "Зеркало", "Снег"
+        ];
+
+        // Текущие слова и связи
+        let currentGame = {
+            adjectives: [],
+            nouns: [],
+            originalPairs: [],
+            guessedPairs: [],
+            selectedNoun: null,
+            isGuessingMode: false,
+            usedAdjectives: new Set(),
+            usedNouns: new Set()
+        };
+
+        // Инициализация игры
+        function initGame() {
+            document.getElementById('adjectives').innerHTML = '<h2>Прилагательные</h2>';
+            document.getElementById('nouns').innerHTML = '<h2>Существительные</h2>';
+            document.getElementById('result').innerHTML = '';
+            
+            // Выбор 5 случайных слов
+            currentGame.adjectives = getRandomWords(adjectives, 5);
+            currentGame.nouns = getRandomWords(nouns, 5);
+            
+            // Добавление слов в колонки
+            currentGame.adjectives.forEach((word, i) => {
+                const el = createWordElement(word, 'adj', i);
+                document.getElementById('adjectives').appendChild(el);
+            });
+            
+            currentGame.nouns.forEach((word, i) => {
+                const el = createWordElement(word, 'noun', i);
+                document.getElementById('nouns').appendChild(el);
+            });
+            
+            // Сброс состояний
+            currentGame.originalPairs = [];
+            currentGame.guessedPairs = [];
+            currentGame.selectedNoun = null;
+            currentGame.isGuessingMode = false;
+            currentGame.usedAdjectives = new Set();
+            currentGame.usedNouns = new Set();
+            
+            document.getElementById('guess-btn').disabled = false;
+            document.getElementById('check-btn').disabled = true;
+        }
+
+        // Создание элемента слова
+        function createWordElement(word, type, index) {
+            const el = document.createElement('div');
+            el.className = 'word';
+            el.textContent = word;
+            el.dataset.type = type;
+            el.dataset.index = index;
+            
+            el.addEventListener('click', () => handleWordClick(el, type, index));
+            return el;
+        }
+
+        // Обработка клика на слово
+        function handleWordClick(element, type, index) {
+            if (element.classList.contains('locked')) return;
+            
+            if (currentGame.isGuessingMode) {
+                handleGuessingClick(element, type, index);
+            } else {
+                handleCreationClick(element, type, index);
+            }
+        }
+
+        // Обработка клика в режиме создания пар
+        function handleCreationClick(element, type, index) {
+            if (type === 'noun') {
+                resetSelection();
+                currentGame.selectedNoun = index;
+                element.classList.add('selected');
+            } else if (type === 'adj' && currentGame.selectedNoun !== null) {
+                const nounElement = document.querySelector(
+                    `.word[data-type="noun"][data-index="${currentGame.selectedNoun}"]`
+                );
+                
+                currentGame.originalPairs.push({
+                    noun: currentGame.selectedNoun,
+                    adjective: index
+                });
+                
+                element.classList.add('locked');
+                nounElement.classList.add('locked');
+                currentGame.selectedNoun = null;
+                
+                if (currentGame.originalPairs.length === 5) {
+                    document.getElementById('guess-btn').disabled = false;
+                }
+            }
+        }
+
+        // Обработка клика в режиме угадывания
+        function handleGuessingClick(element, type, index) {
+            if (type === 'noun' && !currentGame.usedNouns.has(index)) {
+                resetSelection();
+                currentGame.selectedNoun = index;
+                element.classList.add('selected');
+            } else if (type === 'adj' && currentGame.selectedNoun !== null && 
+                      !currentGame.usedAdjectives.has(index)) {
+                currentGame.usedNouns.add(currentGame.selectedNoun);
+                currentGame.usedAdjectives.add(index);
+                
+                const nounElement = document.querySelector(
+                    `.word[data-type="noun"][data-index="${currentGame.selectedNoun}"]`
+                );
+                
+                currentGame.guessedPairs.push({
+                    noun: currentGame.selectedNoun,
+                    adjective: index
+                });
+                
+                element.classList.add('locked');
+                nounElement.classList.add('locked');
+                currentGame.selectedNoun = null;
+                
+                if (currentGame.guessedPairs.length === 5) {
+                    document.getElementById('check-btn').disabled = false;
+                }
+            }
+        }
+
+        // Включение режима угадывания
+        function startGuessing() {
+            currentGame.isGuessingMode = true;
+            currentGame.guessedPairs = [];
+            currentGame.selectedNoun = null;
+            currentGame.usedAdjectives = new Set();
+            currentGame.usedNouns = new Set();
+            
+            // Разблокируем все слова
+            document.querySelectorAll('.word').forEach(el => {
+                el.classList.remove('locked', 'selected', 'correct', 'incorrect');
+            });
+            
+            document.getElementById('guess-btn').disabled = true;
+            document.getElementById('check-btn').disabled = true;
+            document.getElementById('result').innerHTML = 'Угадайте 5 пар!';
+        }
+
+        // Проверка совпадений
+        function checkPairs() {
+            let correctCount = 0;
+            
+            // Сбрасываем все цвета
+            document.querySelectorAll('.word').forEach(el => {
+                el.classList.remove('correct', 'incorrect');
+            });
+            
+            // Проверяем каждую угаданную пару
+            currentGame.guessedPairs.forEach(guessed => {
+                const isCorrect = currentGame.originalPairs.some(original => 
+                    original.noun === guessed.noun && original.adjective === guessed.adjective
+                );
+                
+                const adjElement = document.querySelector(
+                    `.word[data-type="adj"][data-index="${guessed.adjective}"]`
+                );
+                const nounElement = document.querySelector(
+                    `.word[data-type="noun"][data-index="${guessed.noun}"]`
+                );
+                
+                if (isCorrect) {
+                    adjElement.classList.add('correct');
+                    nounElement.classList.add('correct');
+                    correctCount++;
+                } else {
+                    adjElement.classList.add('incorrect');
+                    nounElement.classList.add('incorrect');
+                }
+            });
+            
+            document.getElementById('result').innerHTML = `Угадано: ${correctCount} из 5`;
+            document.getElementById('check-btn').disabled = true;
+        }
+
+        // Сброс выделения
+        function resetSelection() {
+            document.querySelectorAll('.word.selected').forEach(el => {
+                el.classList.remove('selected');
+            });
+        }
+
+        // Выбор N случайных слов
+        function getRandomWords(array, count) {
+            const shuffled = [...array].sort(() => 0.5 - Math.random());
+            return shuffled.slice(0, count);
+        }
+
+        // Инициализация событий
+        document.getElementById('generate-btn').addEventListener('click', initGame);
+        document.getElementById('guess-btn').addEventListener('click', startGuessing);
+        document.getElementById('check-btn').addEventListener('click', checkPairs);
+
+        // Запуск игры при загрузке
+        window.addEventListener('DOMContentLoaded', initGame);
+    </script>
+</body>
+</html>
