@@ -18,7 +18,6 @@
             gap: 20px;
             margin: 20px auto;
             max-width: 800px;
-            flex-wrap: wrap;
         }
         .words-column {
             background: white;
@@ -68,6 +67,18 @@
             font-size: 18px;
             min-height: 50px;
         }
+        @media (max-width: 600px) {
+            .game-container {
+                flex-direction: column;
+                align-items: center;
+            }
+            #nouns {
+                order: 1;
+            }
+            #adjectives {
+                order: 2;
+            }
+        }
     </style>
 </head>
 <body>
@@ -77,11 +88,11 @@
     <button id="check-btn" disabled>Проверить</button>
     
     <div class="game-container">
-        <div class="words-column" id="adjectives">
-            <h2>Прилагательные</h2>
-        </div>
         <div class="words-column" id="nouns">
             <h2>Существительные</h2>
+        </div>
+        <div class="words-column" id="adjectives">
+            <h2>Прилагательные</h2>
         </div>
     </div>
     
